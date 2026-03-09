@@ -71,6 +71,43 @@ async def main():
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 if __name__ == "__main__":
+    asyncio.run(main())    """Ответ на корневой URL (например, для проверки в браузере)"""
+    return web.Response(text="Бот работает", status=200)
+
+async def run_web_server():
+    """Запускает HTTP-сервер на порту 10000"""
+    app = web.Application()
+    app.router.add_get('/health', handle_health)
+    app.router.add_get('/healthcheck', handle_health)
+    app.router.add_get('/', handle_root)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 10000)
+    await site.start()
+    logger.info("✅ Web server started on port 10000")
+
+# ========== ФОНОВЫЙ ПРОЦЕСС ДЛЯ НАПОМИНАНИЙ ==========
+async def reminder_worker():
+    while True:
+        now = datetime.now().strftime("%H:%M")
+        reminders = db.get_active_reminders()
+        for user_id, time_str in reminders:
+            if time_str == now:
+                try:
+                    await bot.send_message(user_id, "🔔 Напоминание: пора позаниматься подготовкой к ЕГЭ!")
+                except Exception as e:
+                    logger.error(f"Не удалось отправить напоминание пользователю {user_id}: {e}")
+        await asyncio.sleep(60)
+
+# ========== ГЛАВНАЯ ФУНКЦИЯ ==========
+async def main():
+    # Запускаем веб-сервер параллельно с ботом
+    asyncio.create_task(run_web_server())
+    asyncio.create_task(reminder_worker())
+    logger.info("🚀 Бот запущен")
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
+if __name__ == "__main__":
     asyncio.run(main())    """Обработчик для корневого URL"""
     return web.Response(text="Бот работает", status=200)
 
