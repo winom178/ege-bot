@@ -6,10 +6,11 @@ from datetime import datetime
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
+from aiohttp import web  # новый импорт
 
 from logger_config import setup_logging
 import database as db
-from handlers import router  # импортируем роутер из handlers.py
+from handlers import router
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -27,6 +28,27 @@ dp = Dispatcher(storage=storage)
 db.init_db()
 dp.include_router(router)
 
+# ========== ПРОСТОЙ ВЕБ-СЕРВЕР ДЛЯ RENDER ==========
+async def handle_health(request):
+    """Обработчик для проверки здоровья (health check)"""
+    return web.Response(text="OK", status=200)
+
+async def handle_root(request):
+    """Обработчик для корневого URL"""
+    return web.Response(text="Бот работает", status=200)
+
+async def run_web_server():
+    """Запускает HTTP-сервер на порту 10000"""
+    app = web.Application()
+    app.router.add_get('/health', handle_health)
+    app.router.add_get('/', handle_root)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 10000)  # слушаем все интерфейсы на порту 10000
+    await site.start()
+    logger.info("Web server started on port 10000")
+
+# ========== ФОНОВЫЙ ПРОЦЕСС ДЛЯ НАПОМИНАНИЙ ==========
 async def reminder_worker():
     while True:
         now = datetime.now().strftime("%H:%M")
@@ -35,6 +57,19 @@ async def reminder_worker():
             if time_str == now:
                 try:
                     await bot.send_message(user_id, "🔔 Напоминание: пора позаниматься подготовкой к ЕГЭ!")
+                except:
+                    pass
+        await asyncio.sleep(60)
+
+async def main():
+    # Запускаем веб-сервер параллельно
+    asyncio.create_task(run_web_server())
+    asyncio.create_task(reminder_worker())
+    logger.info("Бот запущен")
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
+if __name__ == "__main__":
+    asyncio.run(main())                    await bot.send_message(user_id, "🔔 Напоминание: пора позаниматься подготовкой к ЕГЭ!")
                 except:
                     pass
         await asyncio.sleep(60)
