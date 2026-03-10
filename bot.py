@@ -10,7 +10,23 @@ from aiohttp import web
 
 from logger_config import setup_logging
 import database as db
-from handlers import router
+from handlers import (
+    common_router,
+    subjects_router,
+    tasks_router,
+    exam_router,
+    profile_router,
+    elements_router,
+    cheatsheets_router,
+    photo_router,
+    admin_router,
+    achievements_router,
+    repetition_router,
+    referral_router,
+    adaptive_router,
+    daily_challenge_router,
+    lava_router,  # импортируем роутер для LAVA
+)
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -26,25 +42,94 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 db.init_db()
-dp.include_router(router)
+# Инициализируем ачивки (если нужно)
+db.init_achievements()
 
+# Подключаем все роутеры
+dp.include_router(common_router)
+dp.include_router(subjects_router)
+dp.include_router(tasks_router)
+dp.include_router(exam_router)
+dp.include_router(profile_router)
+dp.include_router(elements_router)
+dp.include_router(cheatsheets_router)
+dp.include_router(photo_router)
+dp.include_router(admin_router)
+dp.include_router(achievements_router)
+dp.include_router(repetition_router)
+dp.include_router(referral_router)
+dp.include_router(adaptive_router)
+dp.include_router(daily_challenge_router)
+dp.include_router(lava_router)  # добавляем LAVA роутер
+
+# ========== ВЕБ-СЕРВЕР ДЛЯ HEALTHCHECK И ВЕРИФИКАЦИИ LAVA ==========
 async def handle_health(request):
     return web.Response(text="OK", status=200)
 
 async def handle_root(request):
     return web.Response(text="Бот работает", status=200)
 
+# Эндпоинт для верификации домена LAVA
+async def handle_lava_verification(request):
+    # ⚠️ ЗАМЕНИТЕ НА РЕАЛЬНЫЕ ДАННЫЕ ИЗ ЛИЧНОГО КАБИНЕТА LAVA
+    # Имя файла и его содержимое LAVA предоставит при проверке домена
+    return web.Response(text="ваш_верификационный_текст", status=200)
+
+# Эндпоинт для вебхука LAVA (уведомления об оплатах)
+async def handle_lava_webhook(request):
+    try:
+        data = await request.json()
+        logger.info(f"LAVA webhook received: {data}")
+
+        # Проверка подписи (реализуйте позже по документации LAVA)
+        # signature = request.headers.get("Signature")
+        # if not verify_signature(data, signature):
+        #     return web.Response(text="Invalid signature", status=403)
+
+        # Обработка успешного платежа
+        if data.get("status") == "success" or data.get("status") == "paid":
+            order_id = data.get("order_id")
+            # Извлекаем сохранённые данные о платеже из БД (функция get_pending_payment)
+            payment = db.get_pending_payment(order_id)
+            if payment:
+                # Активируем подписку
+                expires = db.set_subject_premium(
+                    payment["user_id"],
+                    payment["subject"],
+                    payment["days"]
+                )
+                # Уведомляем пользователя
+                try:
+                    await bot.send_message(
+                        payment["user_id"],
+                        f"✅ Оплата прошла успешно!\n"
+                        f"Премиум на предмет {payment['subject']} активирован на {payment['days']} дней (до {expires})."
+                    )
+                except Exception as e:
+                    logger.error(f"Не удалось уведомить пользователя {payment['user_id']}: {e}")
+                # Удаляем запись о платеже
+                db.delete_pending_payment(order_id)
+        return web.Response(text="OK", status=200)
+    except Exception as e:
+        logger.exception(f"Webhook error: {e}")
+        return web.Response(text="Error", status=500)
+
 async def run_web_server():
     app = web.Application()
     app.router.add_get('/health', handle_health)
     app.router.add_get('/healthcheck', handle_health)
     app.router.add_get('/', handle_root)
+    # Эндпоинты для LAVA
+    # lava-verify=bc80577c07a158d1
+    app.router.add_get('/lava-verification.txt', handle_lava_verification)
+    app.router.add_post('/lava-webhook', handle_lava_webhook)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 10000)
     await site.start()
     logger.info("✅ Web server started on port 10000")
 
+# ========== ФОНОВЫЙ ПРОЦЕСС ДЛЯ НАПОМИНАНИЙ ==========
 async def reminder_worker():
     while True:
         now = datetime.now().strftime("%H:%M")
