@@ -71,8 +71,7 @@ async def handle_root(request):
 
 # Эндпоинт для верификации домена LAVA
 async def handle_lava_verification(request):
-    # ⚠️ ЗАМЕНИТЕ НА РЕАЛЬНЫЕ ДАННЫЕ ИЗ ЛИЧНОГО КАБИНЕТА LAVA
-    # Имя файла и его содержимое LAVA предоставит при проверке домена
+   lava-verify=bc80577c07a158d1
     return web.Response(text="ваш_верификационный_текст", status=200)
 
 # Эндпоинт для вебхука LAVA (уведомления об оплатах)
