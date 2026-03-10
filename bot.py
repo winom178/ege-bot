@@ -25,7 +25,7 @@ from handlers import (
     referral_router,
     adaptive_router,
     daily_challenge_router,
-    lava_router,  # импортируем роутер для LAVA
+    lava_router,
 )
 
 setup_logging()
@@ -42,10 +42,8 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 db.init_db()
-# Инициализируем ачивки (если нужно)
 db.init_achievements()
 
-# Подключаем все роутеры
 dp.include_router(common_router)
 dp.include_router(subjects_router)
 dp.include_router(tasks_router)
@@ -60,9 +58,8 @@ dp.include_router(repetition_router)
 dp.include_router(referral_router)
 dp.include_router(adaptive_router)
 dp.include_router(daily_challenge_router)
-dp.include_router(lava_router)  # добавляем LAVA роутер
+dp.include_router(lava_router)
 
-# ========== ВЕБ-СЕРВЕР ДЛЯ HEALTHCHECK И ВЕРИФИКАЦИИ LAVA ==========
 async def handle_health(request):
     return web.Response(text="OK", status=200)
 
@@ -71,33 +68,25 @@ async def handle_root(request):
 
 # Эндпоинт для верификации домена LAVA
 async def handle_lava_verification(request):
-   lava-verify=bc80577c07a158d1
-    return web.Response(text="ваш_верификационный_текст", status=200)
+    # Возвращаем текст, предоставленный LAVA для подтверждения домена
+    return web.Response(text="lava-verify=bc80577c07a158d1", status=200)
 
-# Эндпоинт для вебхука LAVA (уведомления об оплатах)
 async def handle_lava_webhook(request):
     try:
         data = await request.json()
         logger.info(f"LAVA webhook received: {data}")
 
-        # Проверка подписи (реализуйте позже по документации LAVA)
-        # signature = request.headers.get("Signature")
-        # if not verify_signature(data, signature):
-        #     return web.Response(text="Invalid signature", status=403)
+        # Здесь должна быть проверка подписи (по документации LAVA)
 
-        # Обработка успешного платежа
         if data.get("status") == "success" or data.get("status") == "paid":
             order_id = data.get("order_id")
-            # Извлекаем сохранённые данные о платеже из БД (функция get_pending_payment)
             payment = db.get_pending_payment(order_id)
             if payment:
-                # Активируем подписку
                 expires = db.set_subject_premium(
                     payment["user_id"],
                     payment["subject"],
                     payment["days"]
                 )
-                # Уведомляем пользователя
                 try:
                     await bot.send_message(
                         payment["user_id"],
@@ -106,7 +95,6 @@ async def handle_lava_webhook(request):
                     )
                 except Exception as e:
                     logger.error(f"Не удалось уведомить пользователя {payment['user_id']}: {e}")
-                # Удаляем запись о платеже
                 db.delete_pending_payment(order_id)
         return web.Response(text="OK", status=200)
     except Exception as e:
@@ -119,7 +107,6 @@ async def run_web_server():
     app.router.add_get('/healthcheck', handle_health)
     app.router.add_get('/', handle_root)
     # Эндпоинты для LAVA
-    # lava-verify=bc80577c07a158d1
     app.router.add_get('/lava-verification.txt', handle_lava_verification)
     app.router.add_post('/lava-webhook', handle_lava_webhook)
     runner = web.AppRunner(app)
@@ -128,7 +115,6 @@ async def run_web_server():
     await site.start()
     logger.info("✅ Web server started on port 10000")
 
-# ========== ФОНОВЫЙ ПРОЦЕСС ДЛЯ НАПОМИНАНИЙ ==========
 async def reminder_worker():
     while True:
         now = datetime.now().strftime("%H:%M")
