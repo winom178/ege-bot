@@ -13,6 +13,7 @@ from .repetition import router as repetition_router
 from .referral import router as referral_router
 from .adaptive import router as adaptive_router
 from .daily_challenge import router as daily_challenge_router
+from .lava import router as lava_router  # Добавлено для интеграции с LAVA
 
 __all__ = [
     "common_router",
@@ -29,4 +30,5 @@ __all__ = [
     "referral_router",
     "adaptive_router",
     "daily_challenge_router",
+    "lava_router",  # Добавлено в __all__
 ]
